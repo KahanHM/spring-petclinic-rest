@@ -311,11 +311,7 @@ variable "name_web" {
   description = "User startup script to run when instances spin up"
   type        = string
 }
-variable "zone_vm" {
-  description = "User startup script to run when instances spin up"
-  type        = string
-  default     = "us-west1"
-}
+
 
 variable "subnet_web" {
   description = "User startup script to run when instances spin up"
