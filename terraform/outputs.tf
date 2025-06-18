@@ -1,8 +1,4 @@
-#vpc name
-output "network_name" {
-  value       = module.network.network_name
-  description = "The name of the VPC being created"
-}
+
 
 ##Cloud sql output
 output "db_instance_ip" {
