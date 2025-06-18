@@ -24,7 +24,7 @@ ingress_rules = [{
   description        = "for ssh,docker swaem and website access"
   destination_ranges = ["10.10.1.0/24"]
   disabled           = false
-  name               = "allow-ssh"
+  name               = "allow-ssh-node"
   priority           = 1000
   source_ranges      = ["0.0.0.0/0"]
   target_tags        = ["web"]
@@ -62,7 +62,7 @@ ingress_rules = [{
       protocol = "tcp"
     }]
     description   = "restriction the connection"
-    name          = "deny-all"
+    name          = "deny-all-for-swarm"
     priority      = 65535
     source_ranges = ["0.0.0.0/0"]
     target_tags   = ["db"]
@@ -75,7 +75,7 @@ egress_rules = [{
     protocol = "tcp"
   }]
   description   = "restriction the connection"
-  name          = "deny-all-out"
+  name          = "deny-all-out-for-swarm"
   priority      = 65535
   destination_ranges = ["0.0.0.0/0"]
   target_tags   = ["db"]
