@@ -24,7 +24,7 @@ pipeline {
     stage('Check Terraform Changes') {
   steps {
     script {
-      dir('spring-petclinic-rest') {
+      dir('spring-petclinic-rest/terraform') {
         sh 'git fetch origin master'
 
         def changes = sh(
