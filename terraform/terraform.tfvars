@@ -148,7 +148,7 @@ backup_configuration = {
 
 
 # Optional user, password, and DB setup
-#don't use hardcorede passwords 
+#don't use hardcorede passwords in prodution
 user_name_sql     = "appuser"
 user_password_sql = "123"
 db_name_sql       = "petclinicdb"

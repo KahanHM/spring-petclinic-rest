@@ -21,14 +21,14 @@ pipeline {
       }
     }
 
-     stage('Check Terraform Changes') {
+    stage('Check Terraform Changes') {
   steps {
     script {
       dir('spring-petclinic-rest') {
-        sh 'git fetch origin master'  
+        sh 'git fetch origin master'
 
         def changes = sh(
-          script: "git diff --name-only origin/master | grep '.tf' || true",
+          script: "git diff --name-only HEAD..origin/master | grep '.tf' || true",
           returnStdout: true
         ).trim()
 
@@ -38,6 +38,7 @@ pipeline {
     }
   }
 }
+
 stage('Terraform init') {
   when { expression { env.TF_CHANGED == 'true' } }
   steps {
