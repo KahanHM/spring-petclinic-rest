@@ -32,10 +32,10 @@ This Ansible playbook sets up web servers by ensuring Python is present and then
     ```ini
     # inventory.ini
     [web]
-    your_server_ip ansible_user=your_ssh_user ansible_ssh_private_key_file=/path/to/key.pem
+    your_server_name ansible_host=<manager-ip>  ansible_user=your_ssh_user ansible_ssh_private_key_file=/path/to/key.pem
     #if you need more add same way
     #example
-    10.10.10.10 ansible_user=user1 ansible_ssh_private_key_file="/home/user1/key/Testing.pem"
+   server1 ansible_host=10.10.10.10 ansible_user=user1 ansible_ssh_private_key_file="/home/user1/key/Testing.pem"
     ```
     *Replace placeholders with your actual server details.*
 

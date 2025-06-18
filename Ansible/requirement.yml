@@ -1,2 +1,6 @@
-- robertdebock.bootstrap
-- geerlingguy.docker
+---
+# Install roles
+roles:
+  - name: robertdebock.bootstrap
+  - name: geerlingguy.docker
+
