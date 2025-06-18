@@ -23,38 +23,11 @@ pipeline {
       }
     }
 
-    stage('Check Terraform Changes') {
-  steps {
-    script {
-      dir('spring-petclinic-rest') {
-        // Fetch latest changes
-        sh 'git fetch origin master'
-
-        // Compare with current local HEAD
-        def changes = sh(
-          script: "git diff --name-only origin/master...HEAD | grep '.tf' || true",
-          returnStdout: true
-        ).trim()
-
-        // Debug print
-        echo "Changed files:\n${changes}"
-
-        // Set TF_CHANGED based on whether any tf file is found
-        if (changes) {
-          env.TF_CHANGED = 'true'
-        } else {
-          env.TF_CHANGED = 'false'
-        }
-
-        echo "Terraform files changed? ${env.TF_CHANGED}"
-      }
-    }
-  }
-}
-
 
 stage('Terraform init') {
-  when { expression { env.TF_CHANGED == 'true' } }
+  when {
+        changeset pattern: 'spring-petclinic-rest/terraform/**/*.tf', comparator: 'ANT'
+      }
   steps {
     withCredentials([file(credentialsId: 'GCP-credinals', variable: 'GCP_credinals')]) {
       script {
@@ -87,7 +60,9 @@ stage('Terraform init') {
 
 
 stage('Security and Validation Checks') {
-  when { expression { env.TF_CHANGED == 'true' } }
+  when {
+        changeset pattern: 'spring-petclinic-rest/terraform/**/*.tf', comparator: 'ANT'
+      }
   steps {
     script {
       // Step 1: Run tfsec
@@ -134,7 +109,9 @@ stage('Security and Validation Checks') {
 
 
 stage('Terraform Plan') {
-  when { expression { env.TF_CHANGED == 'true' } }
+  when {
+        changeset pattern: 'spring-petclinic-rest/terraform/**/*.tf', comparator: 'ANT'
+      }
   steps {
     withCredentials([file(credentialsId: 'GCP-credinals', variable: 'GCP_credinals')]) {
       script {
@@ -201,7 +178,9 @@ stage('Terraform Plan') {
 
 
 stage('Terraform apply') {
-  when { expression { env.TF_CHANGED == 'true' } }
+  when {
+        changeset pattern: 'spring-petclinic-rest/terraform/**/*.tf', comparator: 'ANT'
+      }
   steps {
     withCredentials([file(credentialsId: 'GCP-credinals', variable: 'GCP_credinals')]) {
       script {

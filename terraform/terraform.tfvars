@@ -14,7 +14,7 @@ subnets = [{ subnet_name = "web-applications"
   subnet_flow_logs      = "false"
   description           = "This subnet is used to DB apps"
 }]
-#ingress rule name is unique in the same zone consider this 
+#ingress rule name is unique in the same zone consider  
 ingress_rules = [{
   allow = [{
     ports    = ["22", "80", "443", "2377", "7946","8080"]
