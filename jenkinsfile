@@ -24,17 +24,13 @@ pipeline {
     stage('Check Terraform Changes') {
   steps {
     script {
-      dir('spring-petclinic-rest/terraform') {
-        sh 'git fetch origin master'
-
-        def changes = sh(
-          script: "git diff --name-only HEAD..origin/master | grep '.tf' || true",
-          returnStdout: true
-        ).trim()
-
-        env.TF_CHANGED = changes ? 'true' : 'false'
-        echo "Terraform files changed? ${env.TF_CHANGED}"
-      }
+      def changes = sh(
+        script: """
+          git diff --name-only ${env.GIT_PREVIOUS_COMMIT} ${env.GIT_COMMIT} -- spring-petclinic-rest/terraform/ | grep '.tf$' || true
+        """,
+        returnStdout: true
+      ).trim()
+      env.TF_CHANGED = changes ? 'true' : 'false'
     }
   }
 }
