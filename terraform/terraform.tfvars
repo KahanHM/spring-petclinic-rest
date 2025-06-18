@@ -106,14 +106,14 @@ create_service_account = false
 
 
 # Web VM variables
-name_web           = "web-hosting"
+name_web           = "pet-clinic-app1"
 zone_vm            = "us-west1-a"
 subnet_web         = "https://www.googleapis.com/compute/v1/projects/earnest-scene-454409-t5/regions/us-west1/subnetworks/web-applications"
 access_config_web  = "PREMIUM"
 startup_script_web = ""
 
 # Web VM variables
-name_web2           = "web-hosting"
+name_web2           = "pet-clinic-app2"
 subnet_web2         = "https://www.googleapis.com/compute/v1/projects/earnest-scene-454409-t5/regions/us-west1/subnetworks/web-applications"
 access_config_web2  = "PREMIUM"
 startup_script_web2 = ""
