@@ -5,7 +5,7 @@ pipeline {
     TF_VAR_project_id = 'earnest-scene-454409-t5'
     EMAIL_RECIPIENTS = 'kahanahamed42@gmail.com'
     RELEASE_FILE = 'release.yaml'
-    TF_CHANGED = 'false' // Initialize TF_CHANGED to false
+    TF_CHANGED = 'false' // Initialize TF_CHANGED
   }
 
   stages {
@@ -13,10 +13,20 @@ pipeline {
       steps {
         script {
           if (fileExists('spring-petclinic-rest')) {
-            sh '''cd spring-petclinic-rest 
-                  git pull'''
+            dir('spring-petclinic-rest') {
+              // Capture the current commit before pulling
+              env.OLD_COMMIT = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+              sh 'git pull'
+              // Capture the new commit after pulling
+              env.NEW_COMMIT = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+            }
           } else {
             sh 'git clone https://github.com/KahanHM/spring-petclinic-rest.git'
+            dir('spring-petclinic-rest') {
+              // For a fresh clone, assume all files are "changed"
+              env.OLD_COMMIT = ''
+              env.NEW_COMMIT = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+            }
           }
         }
       }
@@ -26,20 +36,31 @@ pipeline {
       steps {
         script {
           dir('spring-petclinic-rest/terraform') {
-            sh 'git fetch origin master'
+            if (env.OLD_COMMIT && env.OLD_COMMIT != env.NEW_COMMIT) {
+              // Compare changes between OLD_COMMIT and NEW_COMMIT
+              def changes = sh(
+                script: "git diff --name-only ${env.OLD_COMMIT}..${env.NEW_COMMIT} | grep -E '\\.(tf|tfvars|hcl)\$' || true",
+                returnStdout: true
+              ).trim()
 
-            def changes = sh(
-              script: "git diff --name-only HEAD..origin/master | grep '.tf' || true",
-              returnStdout: true
-            ).trim()
+              env.TF_CHANGED = changes ? 'true' : 'false'
+            } else if (!env.OLD_COMMIT) {
+              // For fresh clone, check if any Terraform files exist
+              def changes = sh(
+                script: "git ls-files | grep -E '\\.(tf|tfvars|hcl)\$' || true",
+                returnStdout: true
+              ).trim()
 
-            env.TF_CHANGED = changes ? 'true' : 'false'
+              env.TF_CHANGED = changes ? 'true' : 'false'
+            }
             echo "Terraform files changed? ${env.TF_CHANGED}"
+            if (env.TF_CHANGED == 'true') {
+              echo "Changed files:\n${changes}"
+            }
           }
         }
       }
     }
-
 stage('Terraform init') {
   when { expression { env.TF_CHANGED == 'true' } }
   steps {
