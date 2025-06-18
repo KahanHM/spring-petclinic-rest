@@ -61,7 +61,7 @@ stage('Terraform init') {
           emailext(
             subject: "Terraform init Failed",
             body: "Terraform init failed! Check Jenkins console for details.",
-            to: 'env.EMAIL_RECIPIENTS'
+            to: "${env.EMAIL_RECIPIENTS}"
           )
           error("Terraform init failed")
         }
@@ -84,7 +84,7 @@ stage('Security and Validation Checks') {
         emailext(
           subject: "tfsec Scan Failed",
           body: "tfsec scan failed. Please check your Terraform code.",
-          to: '{env.EMAIL_RECIPIENTS}'
+          to: "${env.EMAIL_RECIPIENTS}"
         )
         error("Stopping pipeline due to tfsec failure")
       }
@@ -103,7 +103,7 @@ stage('Security and Validation Checks') {
         emailext(
           subject: "Terraform Validate Failed",
           body: "Terraform validation failed. Please fix errors before proceeding.",
-          to: '{env.EMAIL_RECIPIENTS}'
+          to: "${env.EMAIL_RECIPIENTS}"
         )
         error("Stopping pipeline due to terraform validate failure")
       }
@@ -206,7 +206,7 @@ stage('Terraform apply') {
           emailext(
             subject: "Terraform Apply Successful",
             body: "Terraform Apply completed successfully.",
-            to: '{env.EMAIL_RECIPIENTS}'
+            to: "${env.EMAIL_RECIPIENTS}"
           )
 
         } catch (err) {
@@ -214,7 +214,7 @@ stage('Terraform apply') {
           emailext(
             subject: "Terraform Apply Failed",
             body: "Terraform Apply failed! Check Jenkins console for details.",
-            to: '{env.EMAIL_RECIPIENTS}'
+            to: "${env.EMAIL_RECIPIENTS}"
           )
           error("Terraform Apply failed")
         }
