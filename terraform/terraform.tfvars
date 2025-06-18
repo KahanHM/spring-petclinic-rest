@@ -75,9 +75,9 @@ egress_rules = [{
     protocol = "tcp"
   }]
   description   = "restriction the connection"
-  name          = "deny-all"
+  name          = "deny-all-out"
   priority      = 65535
-  source_ranges = ["0.0.0.0/0"]
+  destination_ranges = ["0.0.0.0/0"]
   target_tags   = ["db"]
 }]
 
