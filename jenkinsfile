@@ -19,6 +19,7 @@ pipeline {
               sh 'git pull'
               // Capture the new commit after pulling
               env.NEW_COMMIT = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+              echo "Old commit: ${env.OLD_COMMIT}, New commit: ${env.NEW_COMMIT}"
             }
           } else {
             sh 'git clone https://github.com/KahanHM/spring-petclinic-rest.git'
@@ -26,6 +27,7 @@ pipeline {
               // For a fresh clone, assume all files are "changed"
               env.OLD_COMMIT = ''
               env.NEW_COMMIT = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
+              echo "Fresh clone, New commit: ${env.NEW_COMMIT}"
             }
           }
         }
@@ -37,25 +39,40 @@ pipeline {
         script {
           dir('spring-petclinic-rest/terraform') {
             if (env.OLD_COMMIT && env.OLD_COMMIT != env.NEW_COMMIT) {
-              // Compare changes between OLD_COMMIT and NEW_COMMIT
+              // Debug: Print raw git diff output
+              def diffOutput = sh(
+                script: "git diff --name-only ${env.OLD_COMMIT}..${env.NEW_COMMIT} -- terraform/",
+                returnStdout: true
+              ).trim()
+              echo "Git diff output:\n${diffOutput}"
+
+              // Check for Terraform-related files
               def changes = sh(
-                script: "git diff --name-only ${env.OLD_COMMIT}..${env.NEW_COMMIT} | grep -E '\\.(tf|tfvars|hcl)\$' || true",
+                script: "git diff --name-only ${env.OLD_COMMIT}..${env.NEW_COMMIT} -- terraform/ | grep -E '\\.(tf|tfvars|hcl)$' || true",
                 returnStdout: true
               ).trim()
 
               env.TF_CHANGED = changes ? 'true' : 'false'
+              echo "Terraform files changed? ${env.TF_CHANGED}"
+              if (changes) {
+                echo "Changed Terraform files:\n${changes}"
+              } else {
+                echo "No Terraform files changed."
+              }
             } else if (!env.OLD_COMMIT) {
               // For fresh clone, check if any Terraform files exist
               def changes = sh(
-                script: "git ls-files | grep -E '\\.(tf|tfvars|hcl)\$' || true",
+                script: "git ls-files | grep -E '\\.(tf|tfvars|hcl)$' || true",
                 returnStdout: true
               ).trim()
 
               env.TF_CHANGED = changes ? 'true' : 'false'
-            }
-            echo "Terraform files changed? ${env.TF_CHANGED}"
-            if (env.TF_CHANGED == 'true') {
-              echo "Changed files:\n${changes}"
+              echo "Fresh clone - Terraform files exist? ${env.TF_CHANGED}"
+              if (changes) {
+                echo "Terraform files in fresh clone:\n${changes}"
+              } else {
+                echo "No Terraform files found in fresh clone."
+              }
             }
           }
         }
