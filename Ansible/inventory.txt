@@ -1,4 +1,5 @@
-
+#try to chang this file in .ini format and run the playbook we cna't use this file directly on cicd that's why i used like this 
+#i used jenkins credinals to store this file and use it so this is a sample file
 
 [manager]
 manager-node ansible_host=<manager-ip> ansible_user={user name} ansible_ssh_private_key_file="{path to  ssh key}"

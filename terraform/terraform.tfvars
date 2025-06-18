@@ -17,7 +17,7 @@ subnets = [{ subnet_name = "web-applications"
 
 ingress_rules = [{
   allow = [{
-    ports    = ["22", "80", "443", "2377", "7946"]
+    ports    = ["22", "80", "443", "2377", "7946","8080"]
     protocol = "tcp"
   }]
   deny               = []

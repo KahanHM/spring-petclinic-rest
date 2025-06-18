@@ -4,6 +4,7 @@ pipeline {
   environment {
     TF_VAR_project_id = 'earnest-scene-454409-t5'
     EMAIL_RECIPIENTS = 'kahanahamed42@gmail.com'
+    RELEASE_FILE = 'release.yaml'
   }
 
   stages {
@@ -31,7 +32,7 @@ pipeline {
           returnStdout: true
         ).trim()
 
-        env.TF_CHANGED = changes ? ' false' : 'true'
+        env.TF_CHANGED = changes ? ' true' : 'false'
         echo "Terraform files changed? ${env.TF_CHANGED}"
       }
     }
@@ -220,6 +221,10 @@ stage('Terraform apply') {
     }
   }
 }
+
+
+
+
 
 
 
