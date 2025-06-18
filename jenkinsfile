@@ -32,7 +32,7 @@ pipeline {
           returnStdout: true
         ).trim()
 
-        env.TF_CHANGED = changes ? ' true' : 'false'
+        env.TF_CHANGED = changes ? 'true' : 'false'
         echo "Terraform files changed? ${env.TF_CHANGED}"
       }
     }

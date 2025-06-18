@@ -1,6 +1,5 @@
 
-
-##Cloud sql output
+##Cloud sql output for DB
 output "db_instance_ip" {
   value = module.mysql-db.private_ip_address
 }
