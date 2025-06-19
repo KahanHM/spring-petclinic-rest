@@ -3,5 +3,5 @@
 
 version: "1.0.0"
 description: "🐳 Docker image refactor + Trivy security scan"
-docker_repo: "kahanahamed/spring-petclinic"
+docker_repo: "kahanhm/spring-petclinic"
 apply_changes: true
