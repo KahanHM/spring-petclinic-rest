@@ -239,7 +239,7 @@ stage('Ansible: Install Galaxy Roles') {
         -v "$PWD/Ansible":/ansible \
         -w /ansible \
         williamyeh/ansible:alpine3 \
-        ansible-galaxy install -r requirements.yml
+        ansible-galaxy install -r requirement.yml
     '''
   }
 }
@@ -324,10 +324,10 @@ stage('Load Release Metadata') {
           env.docker_repo = release.docker_repo
           env.APPLY_CHANGES = release.apply_changes.toString()
 
-          echo "🔖 Version: ${env.VERSION}"
-          echo "📄 Description: ${env.DESCRIPTION}"
-          echo "🐳 Docker Tag: ${env.docker_repo}"
-          echo "✅ Apply Changes? ${env.APPLY_CHANGES}"
+          echo " Version: ${env.VERSION}"
+          echo " Description: ${env.DESCRIPTION}"
+          echo " Docker Tag: ${env.docker_repo}"
+          echo " Apply Changes? ${env.APPLY_CHANGES}"
         }
       }
     }
@@ -339,10 +339,10 @@ stage('Docker Build') {
     script {
       try {
         sh "docker build -t ${docker_repo}:${VERSION} $PWD/"
-        echo "✅ Docker image built successfully: ${env.IMAGE_NAME}"
+        echo " Docker image built successfully: ${env.IMAGE_NAME}"
       } catch (err) {
         emailext(
-          subject: "Docker Build Failed ❌",
+          subject: "Docker Build Failed ",
           body: "Docker build failed for image ${env.IMAGE_NAME}. Check Jenkins logs.",
           to: "${env.EMAIL_RECIPIENTS}"
         )
