@@ -345,6 +345,127 @@ stage('Load Release Metadata') {
 
 
 
+stage('Docker Build') {
+  steps {
+    script {
+      try {
+        sh "docker build -t ${docker_repo}:${VERSION} $PWD/"
+        echo " Docker image built successfully: ${env.IMAGE_NAME}"
+      } catch (err) {
+        emailext(
+          subject: "Docker Build Failed ",
+          body: "Docker build failed for image ${env.IMAGE_NAME}. Check Jenkins logs.",
+          to: "${env.EMAIL_RECIPIENTS}"
+        )
+        error("Docker build failed")
+      }
+    }
+  }
+}
+
+
+stage('Trivy Scan') {
+  steps {
+    script {
+      def scanResult = sh(
+        script: """
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy image \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --exit-code 1 \
+            --no-progress \
+            ${env.IMAGE_NAME}
+        """,
+        returnStatus: true
+      )
+
+      if (scanResult != 0) {
+        emailext(
+          subject: "Trivy Scan Failed ",
+          body: "Trivy scan failed on ${env.IMAGE_NAME}. Fix critical/high vulnerabilities before proceeding.",
+          to: "${env.EMAIL_RECIPIENTS}"
+        )
+        error("Trivy scan failed due to fixable vulnerabilities.")
+      } else {
+        echo " No fixable CRITICAL or HIGH vulnerabilities found."
+      }
+    }
+  }
+}
+
+
+stage('Push to Docker Hub') {
+  steps {
+    withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', passwordVariable: 'DOCKER_TOKEN', usernameVariable: 'DOCKER_USERNAME')]) {
+      script {
+        try {
+          sh """
+            echo $DOCKER_TOKEN | docker login -u $DOCKER_USERNAME --password-stdin
+            docker push ${env.IMAGE_NAME}
+          """
+          echo " Image pushed to Docker Hub: ${env.IMAGE_NAME}"
+        } catch (err) {
+          emailext(
+            subject: "Docker Push Failed ",
+            body: "Failed to push Docker image ${env.IMAGE_NAME} to Docker Hub. Check credentials or network.",
+            to: "${env.EMAIL_RECIPIENTS}"
+          )
+          error("Docker push failed")
+        }
+      }
+    }
+  }
+}
+
+
+stage('Copy The Docker Compose file') {
+    steps {
+        withCredentials([
+            sshUserPrivateKey(credentialsId: 'manager-ssh', keyFileVariable: 'SSH_KEY', usernameVariable: 'USER'),
+            string(credentialsId: 'ServerIP', variable: 'ServerIP')
+        ]) {
+            script {
+                        echo 'Copying docker-compose.yml to EC2 instance...'
+                        sh """
+                        scp -o StrictHostKeyChecking=no -i ${SSH_KEY} ${WORKSPACE}/docker-compose.yml ${USER}@${ServerIP}:/home/ubuntu/NodeJSApp/docker-compose.yml
+                        """
+
+                        echo 'Deploying application with Docker Swarm...'
+                        sh """
+                        ssh -o StrictHostKeyChecking=no -i ${SSH_KEY} ${USER}@${ServerIP} <<EOF
+                        docker stack deploy -c docker-compose.yml petclinic-stack
+                        docker stack ls
+                        """
+            }
+        }
+    }
+}
+
+stage('Notify Completion') {
+  steps {
+    script {
+      emailext(
+        subject: "✅ CI/CD Pipeline Completed",
+        body: """
+Hello Team,
+
+The CI/CD Pipeline for project *Spring PetClinic* has completed successfully.
+Terraform, Ansible, Docker, and Deployment tasks ran without failure.
+
+Release: ${env.VERSION}
+Docker Image: ${env.IMAGE_NAME}
+
+Regards,
+Your Jenkins Pipeline 🤖
+""",
+        to: "${env.EMAIL_RECIPIENTS}"
+      )
+    }
+  }
+}
+
 
 
 
