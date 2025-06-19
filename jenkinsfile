@@ -1,6 +1,10 @@
 pipeline {
   agent { label 'Agent1' }
 
+  options {
+    skipDefaultCheckout(true) // 👈 Disable Jenkins' default repo checkout
+  }
+
   environment {
     TF_VAR_project_id = 'earnest-scene-454409-t5'
     EMAIL_RECIPIENTS = 'kahanahamed42@gmail.com'
@@ -8,66 +12,72 @@ pipeline {
   }
 
   stages {
-    stage('Clone Repo') {
-      steps {
-        script {
-          if (fileExists('spring-petclinic-rest')) {
-            dir('spring-petclinic-rest') {
-              sh 'git reset --hard HEAD'  // Ensure clean state
-              sh 'git pull origin master'
-            }
-          } else {
-            sh 'git clone https://github.com/KahanHM/spring-petclinic-rest.git'
-          }
-        }
-      }
-    }
 
-
-stage('Terraform init') {
-  when {
-        changeset pattern: 'spring-petclinic-rest/terraform/**/*.tf', comparator: 'ANT'
-      }
+   stage('Clone Repo') {
   steps {
-    withCredentials([file(credentialsId: 'GCP-credinals', variable: 'GCP_credinals')]) {
-      script {
-        try {
-          sh '''
-            docker run --rm \
-              -v "$PWD/spring-petclinic-rest/terraform:/workspace" \
-              -v "$GCP_credinals:/workspace/creds.json" \
-              -w /workspace \
-              -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/creds.json" \
-              hashicorp/terraform:1.9.7 \
-              init \
-                -backend-config="bucket=my-tf-petclinic-backend" \
-                -backend-config="prefix=petclinic/petclinic-backend" \
-                -backend-config="credentials=/workspace/creds.json"
-          '''
-        } catch (err) {
-          emailext(
-            subject: "Terraform init Failed",
-            body: "Terraform init failed! Check Jenkins console for details.",
-            to: "${env.EMAIL_RECIPIENTS}"
-          )
-          error("Terraform init failed")
-        }
+    script {
+      if (fileExists('jenkinsfile')) {
+        echo " Repo already cloned. Pulling latest changes..."
+        sh '''
+          git reset --hard HEAD
+          git pull origin master
+        '''
+      } else {
+        echo " Cloning the repository..."
+        sh 'git clone https://github.com/KahanHM/spring-petclinic-rest.git .'
       }
+
+      // ✅ Important: Register changelog for `changeset` to work
+      checkout scm
     }
   }
 }
 
+    stage('Terraform Init') {
+      // 🔍 Detect changes in terraform/*.tf files at the root-level
+      when {
+        changeset pattern: 'terraform/**/*.tf', comparator: 'ANT'
+      }
+      steps {
+        withCredentials([file(credentialsId: 'GCP-credinals', variable: 'GCP_credinals')]) {
+          script {
+            try {
+              sh '''
+                docker run --rm \
+                  -v "$PWD/terraform:/workspace" \
+                  -v "$GCP_credinals:/workspace/creds.json" \
+                  -w /workspace \
+                  -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/creds.json" \
+                  hashicorp/terraform:1.9.7 \
+                  init \
+                    -backend-config="bucket=my-tf-petclinic-backend" \
+                    -backend-config="prefix=petclinic/petclinic-backend" \
+                    -backend-config="credentials=/workspace/creds.json"
+              '''
+            } catch (err) {
+              emailext(
+                subject: "Terraform Init Failed",
+                body: "Terraform init failed. Check Jenkins logs for details.",
+                to: "${env.EMAIL_RECIPIENTS}"
+              )
+              error("Terraform init failed")
+            }
+          }
+        }
+      }
+    }
+    
 
 
 stage('Security and Validation Checks') {
   when {
-        changeset pattern: 'spring-petclinic-rest/terraform/**/*.tf', comparator: 'ANT'
+        changeset pattern: 'terraform/**/*.tf', comparator: 'ANT'
       }
   steps {
     script {
       // Step 1: Run tfsec
       try {
-        sh 'docker run --rm -v "$PWD/spring-petclinic-rest/terraform:/src" aquasec/tfsec:latest /src'
+        sh 'docker run --rm -v "$PWD/terraform:/src" aquasec/tfsec:latest /src'
         echo "tfsec scan passed."
       } catch (err) {
         emailext(
@@ -82,7 +92,7 @@ stage('Security and Validation Checks') {
       try {
         sh '''
           docker run --rm \
-            -v "$PWD/spring-petclinic-rest/terraform:/workspace" \
+            -v "$PWD/terraform:/workspace" \
             -w /workspace \
             hashicorp/terraform:1.9.7 \
             validate
@@ -110,7 +120,7 @@ stage('Security and Validation Checks') {
 
 stage('Terraform Plan') {
   when {
-        changeset pattern: 'spring-petclinic-rest/terraform/**/*.tf', comparator: 'ANT'
+        changeset pattern: 'terraform/**/*.tf', comparator: 'ANT'
       }
   steps {
     withCredentials([file(credentialsId: 'GCP-credinals', variable: 'GCP_credinals')]) {
@@ -119,7 +129,7 @@ stage('Terraform Plan') {
         def stateCheck = sh(
           script: '''
             docker run --rm \
-              -v "$PWD/spring-petclinic-rest/terraform:/workspace" \
+              -v "$PWD/terraform:/workspace" \
               -v "$GCP_credinals:/workspace/creds.json" \
               -w /workspace \
               -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/creds.json" \
@@ -134,7 +144,7 @@ stage('Terraform Plan') {
           echo "No existing Terraform state found. Running terraform init..."
           sh '''
             docker run --rm \
-              -v "$PWD/spring-petclinic-rest/terraform:/workspace" \
+              -v "$PWD/terraform:/workspace" \
               -v "$GCP_credinals:/workspace/creds.json" \
               -w /workspace \
               -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/creds.json" \
@@ -147,7 +157,7 @@ stage('Terraform Plan') {
         def planExitCode = sh(
           script: '''
             docker run --rm \
-              -v "$PWD/spring-petclinic-rest/terraform:/workspace" \
+              -v "$PWD/terraform:/workspace" \
               -v "$GCP_credinals:/workspace/creds.json" \
               -w /workspace \
               -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/creds.json" \
@@ -179,7 +189,7 @@ stage('Terraform Plan') {
 
 stage('Terraform apply') {
   when {
-        changeset pattern: 'spring-petclinic-rest/terraform/**/*.tf', comparator: 'ANT'
+        changeset pattern: 'terraform/**/*.tf', comparator: 'ANT'
       }
   steps {
     withCredentials([file(credentialsId: 'GCP-credinals', variable: 'GCP_credinals')]) {
@@ -187,7 +197,7 @@ stage('Terraform apply') {
         try {
           sh '''
             docker run --rm \
-              -v "$PWD/spring-petclinic-rest/terraform:/workspace" \
+              -v "$PWD/terraform:/workspace" \
               -v "$GCP_credinals:/workspace/creds.json" \
               -w /workspace \
               -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/creds.json" \
