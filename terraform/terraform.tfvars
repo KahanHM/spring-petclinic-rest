@@ -81,7 +81,7 @@ egress_rules = [{
   target_tags   = ["db"]
 }]
 
-##Compute engine template 
+##Compute engine template
 project_id_vm = "earnest-scene-454409-t5"
 region        = "us-west1"
 machine_type  = "e2-micro"
