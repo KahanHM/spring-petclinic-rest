@@ -11,7 +11,7 @@
   become: true
   gather_facts: false
   vars_files:
-    - vars/docker.yml
+    - vars/docker.yaml
   roles:
     - geerlingguy.docker
 
@@ -19,7 +19,7 @@
   hosts: manager
   become: true
   vars_files:
-    - vars/swarm.yml
+    - vars/swarm.yaml
   tasks:
     - name: Check if swarm already initialized
       ansible.builtin.command: docker info --format '{{ '{{.Swarm.LocalNodeState}}' }}'
@@ -37,7 +37,7 @@
   tags: swram
   become: true
   vars_files:
-    - vars/swarm.yml
+    - vars/swarm.yaml
   tasks:
     - name: Get worker join token
       ansible.builtin.command: docker swarm join-token -q worker
@@ -55,7 +55,7 @@
   tags: swram
   become: true
   vars_files:
-    - vars/swarm.yml
+    - vars/swarm.yaml
   tasks:
     - name: Check if node is already in swarm
       ansible.builtin.command: docker info --format '{{ '{{.Swarm.LocalNodeState}}' }}'
@@ -72,11 +72,11 @@
       when: node_swarm_status.stdout != "active" or node_swarm_status.rc != 0
       changed_when: false
 
-- name: Copy docker-compose.yml to Swarm Manager
+- name: Copy docker-compose.yaml to Swarm Manager
   hosts: manager
   become: true
   vars_files:
-    - vars/swarm.yml
+    - vars/swarm.yaml
   tasks:
     - name: Copy docker-compose.yml into manager home
       ansible.builtin.copy:
