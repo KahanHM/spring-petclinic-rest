@@ -12,7 +12,7 @@ module "network" {
 }
 
 
-# --- Instance Template ---
+# --- Instance Template ---module
 module "web_instance_template" {
   source  = "terraform-google-modules/vm/google//modules/instance_template"
   version = "13.2.4"

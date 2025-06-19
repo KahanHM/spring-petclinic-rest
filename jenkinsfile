@@ -1,3 +1,5 @@
+def terraformChanged = false
+
 pipeline {
   agent { label 'Agent1' }
 
@@ -9,7 +11,6 @@ pipeline {
     TF_VAR_project_id = 'earnest-scene-454409-t5'
     EMAIL_RECIPIENTS = 'kahanahamed42@gmail.com'
     RELEASE_FILE = 'release.yaml'
-    TERRAFORM_CHANGED = 'false'
   }
 
   stages {
@@ -49,19 +50,21 @@ pipeline {
           // Check if terraform files changed
           if (changedFiles.contains('terraform/') && 
               (changedFiles.contains('.tf') || changedFiles.contains('.tfvars'))) {
-            env.TERRAFORM_CHANGED = 'true'
+            terraformChanged = true
             echo "🔥 Terraform files detected in changes. Will run Terraform stages."
           } else {
-            env.TERRAFORM_CHANGED = 'false'
+            terraformChanged = false
             echo "⏭️  No Terraform files changed. Skipping Terraform stages."
           }
+          
+          echo "DEBUG: terraformChanged = ${terraformChanged}"
         }
       }
     }
 
     stage('Terraform Init') {
       when {
-        environment name: 'TERRAFORM_CHANGED', value: 'true'
+        expression { return terraformChanged }
       }
       steps {
         withCredentials([file(credentialsId: 'GCP-credinals', variable: 'GCP_credinals')]) {
@@ -94,7 +97,7 @@ pipeline {
 
     stage('Security and Validation Checks') {
       when {
-        environment name: 'TERRAFORM_CHANGED', value: 'true'
+        expression { return terraformChanged }
       }
       steps {
         script {
@@ -135,7 +138,7 @@ pipeline {
 
     stage('Terraform Plan') {
       when {
-        environment name: 'TERRAFORM_CHANGED', value: 'true'
+        expression { return terraformChanged }
       }
       steps {
         withCredentials([file(credentialsId: 'GCP-credinals', variable: 'GCP_credinals')]) {
@@ -200,7 +203,7 @@ pipeline {
 
     stage('Terraform apply') {
       when {
-        environment name: 'TERRAFORM_CHANGED', value: 'true'
+        expression { return terraformChanged }
       }
       steps {
         withCredentials([file(credentialsId: 'GCP-credinals', variable: 'GCP_credinals')]) {
