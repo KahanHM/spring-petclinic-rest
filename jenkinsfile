@@ -297,7 +297,7 @@ stage('Ansible: Run Playbook') {
     -v "$SSH_KEY":/root/.ssh/id_rsa:ro \
     -w /ansible \
     -e ANSIBLE_ROLES_PATH=/ansible/roles \
-    williamyeh/ansible:alpine3 \
+    cytopia/ansible:2.9-tools \
     ansible-playbook \
       -i inventory/hosts.ini \
       --private-key=/root/.ssh/id_rsa \
