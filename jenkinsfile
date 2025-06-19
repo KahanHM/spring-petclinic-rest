@@ -239,7 +239,7 @@ stage('Ansible: Install Galaxy Roles') {
         -v "$PWD/Ansible":/ansible \
         -w /ansible \
         williamyeh/ansible:alpine3 \
-        ansible-galaxy role install -r requirement.yml  
+        ansible-galaxy install -r requirement.yml -p roles
     '''
   }
 }
@@ -254,15 +254,16 @@ stage('Ansible: Lint') {
       try {
         sh '''
           docker run --rm \
-  -v "$PWD/Ansible":/data \
-  -w /data \
-  pipelinecomponents/ansible-lint:latest \
-  playbook.yaml
+            -v "$PWD/Ansible":/data \
+            -w /data \
+            -e ANSIBLE_ROLES_PATH=/data/roles \
+            pipelinecomponents/ansible-lint:latest \
+            playbook.yaml
         '''
         echo "Ansible lint passed."
       } catch (err) {
         emailext(
-          subject: "Ansible Lint Failed ",
+          subject: "Ansible Lint Failed",
           body: "Ansible linting failed. Please fix issues before proceeding.",
           to: "${env.EMAIL_RECIPIENTS}"
         )
@@ -271,6 +272,7 @@ stage('Ansible: Lint') {
     }
   }
 }
+
 
 stage('Ansible: Run Playbook') {
   when {
@@ -288,18 +290,19 @@ stage('Ansible: Run Playbook') {
       script {
         try {
           sh '''
-            docker run --rm \
-              -v "$PWD/Ansible":/ansible \
-              -v "$INV":/ansible/inventory/hosts.ini:ro \
-              -v "$SSH_KEY":/root/.ssh/id_rsa:ro \
-              -w /ansible \
-              williamyeh/ansible:alpine3 \
-              ansible-playbook \
-                -i inventory/hosts.ini \
-                --private-key=/root/.ssh/id_rsa \
-                -u $ANSIBLE_USER \
-                playbook.yaml
-          '''
+  docker run --rm \
+    -v "$PWD/Ansible":/ansible \
+    -v "$INV":/ansible/inventory/hosts.ini:ro \
+    -v "$SSH_KEY":/root/.ssh/id_rsa:ro \
+    -w /ansible \
+    -e ANSIBLE_ROLES_PATH=/ansible/roles \
+    williamyeh/ansible:alpine3 \
+    ansible-playbook \
+      -i inventory/hosts.ini \
+      --private-key=/root/.ssh/id_rsa \
+      -u $ANSIBLE_USER \
+      playbook.yaml
+'''
           echo " Ansible playbook ran successfully."
         } catch (err) {
           emailext(
