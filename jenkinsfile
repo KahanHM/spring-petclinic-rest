@@ -349,12 +349,15 @@ stage('Docker Build') {
   steps {
     script {
       try {
-        sh "docker build -t ${docker_repo}:${VERSION} $PWD/"
+        if (!fileExists('Dockerfile')) {
+          error("Dockerfile not found in workspace! Check your repo structure.")
+        }
+        sh "docker build -t ${env.IMAGE_NAME} ."
         echo " Docker image built successfully: ${env.IMAGE_NAME}"
       } catch (err) {
         emailext(
-          subject: "Docker Build Failed ",
-          body: "Docker build failed for image ${env.IMAGE_NAME}. Check Jenkins logs.",
+          subject: "Docker Build Failed",
+          body: "Docker build failed for image ${env.IMAGE_NAME}. Check if Dockerfile exists and is valid.\nError: ${err}",
           to: "${env.EMAIL_RECIPIENTS}"
         )
         error("Docker build failed")
@@ -362,7 +365,6 @@ stage('Docker Build') {
     }
   }
 }
-
 
 stage('Trivy Scan') {
   steps {
