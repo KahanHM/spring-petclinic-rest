@@ -322,107 +322,27 @@ stage('Ansible: Run Playbook') {
 stage('Load Release Metadata') {
   steps {
     script {
-      if (!fileExists(RELEASE_FILE)) {
+      if (fileExists(RELEASE_FILE)) {
         def release = readYaml(file: RELEASE_FILE)
 
-      env.VERSION       = release.version
-      env.DESCRIPTION   = release.description
-      env.docker_repo   = release.docker_repo
-      env.APPLY_CHANGES = release.apply_changes.toString()
-      env.IMAGE_NAME    = "${release.docker_repo}:${release.version}"
+        env.VERSION        = release.version
+        env.DESCRIPTION    = release.description
+        env.docker_repo    = release.docker_repo
+        env.APPLY_CHANGES  = release.apply_changes.toString()
+        env.IMAGE_NAME     = "${release.docker_repo}:${release.version}"
 
-
-
-      echo " Version: ${env.VERSION}"
-      echo " Description: ${env.DESCRIPTION}"
-      echo " Docker Tag: ${env.docker_repo}"
-      echo " Apply Changes? ${env.APPLY_CHANGES}"
-        
-      }
-
-      
-
-    }
-  }
-}
-
-
-
-
-
-stage('Docker Build') {
-  steps {
-    script {
-      try {
-        sh "docker build -t ${docker_repo}:${VERSION} $PWD/"
-        echo " Docker image built successfully: ${env.IMAGE_NAME}"
-      } catch (err) {
-        emailext(
-          subject: "Docker Build Failed ",
-          body: "Docker build failed for image ${env.IMAGE_NAME}. Check Jenkins logs.",
-          to: "${env.EMAIL_RECIPIENTS}"
-        )
-        error("Docker build failed")
-      }
-    }
-  }
-}
-
-
-stage('Trivy Scan') {
-  steps {
-    script {
-      def scanResult = sh(
-        script: """
-          docker run --rm \
-            -v /var/run/docker.sock:/var/run/docker.sock \
-            aquasec/trivy image \
-            --severity CRITICAL,HIGH \
-            --ignore-unfixed \
-            --exit-code 1 \
-            --no-progress \
-            ${env.IMAGE_NAME}
-        """,
-        returnStatus: true
-      )
-
-      if (scanResult != 0) {
-        emailext(
-          subject: "Trivy Scan Failed ",
-          body: "Trivy scan failed on ${env.IMAGE_NAME}. Fix critical/high vulnerabilities before proceeding.",
-          to: "${env.EMAIL_RECIPIENTS}"
-        )
-        error("Trivy scan failed due to fixable vulnerabilities.")
+        echo "Version: ${env.VERSION}"
+        echo "Description: ${env.DESCRIPTION}"
+        echo "Docker Tag: ${env.IMAGE_NAME}"
+        echo "Apply Changes? ${env.APPLY_CHANGES}"
       } else {
-        echo " No fixable CRITICAL or HIGH vulnerabilities found."
+        error("release.yaml not found at ${RELEASE_FILE}")
       }
     }
   }
 }
 
 
-stage('Push to Docker Hub') {
-  steps {
-    withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', passwordVariable: 'DOCKER_TOKEN', usernameVariable: 'DOCKER_USERNAME')]) {
-      script {
-        try {
-          sh """
-            echo $DOCKER_TOKEN | docker login -u $DOCKER_USERNAME --password-stdin
-            docker push ${env.IMAGE_NAME}
-          """
-          echo " Image pushed to Docker Hub: ${env.IMAGE_NAME}"
-        } catch (err) {
-          emailext(
-            subject: "Docker Push Failed ",
-            body: "Failed to push Docker image ${env.IMAGE_NAME} to Docker Hub. Check credentials or network.",
-            to: "${env.EMAIL_RECIPIENTS}"
-          )
-          error("Docker push failed")
-        }
-      }
-    }
-  }
-}
 
 
 
