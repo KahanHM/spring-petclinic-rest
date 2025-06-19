@@ -2,41 +2,66 @@ pipeline {
   agent { label 'Agent1' }
 
   options {
-    skipDefaultCheckout(true) // 👈 Disable Jenkins' default repo checkout
+    skipDefaultCheckout(true)
   }
 
   environment {
     TF_VAR_project_id = 'earnest-scene-454409-t5'
     EMAIL_RECIPIENTS = 'kahanahamed42@gmail.com'
     RELEASE_FILE = 'release.yaml'
+    TERRAFORM_CHANGED = 'false'
   }
 
   stages {
 
-   stage('Clone Repo') {
-  steps {
-    script {
-      if (fileExists('jenkinsfile')) {
-        echo " Repo already cloned. Pulling latest changes..."
-        sh '''
-          git reset --hard HEAD
-          git pull origin master
-        '''
-      } else {
-        echo " Cloning the repository..."
-        sh 'git clone https://github.com/KahanHM/spring-petclinic-rest.git .'
+    stage('Clone Repo and Detect Changes') {
+      steps {
+        script {
+          if (fileExists('jenkinsfile')) {
+            echo "Repo already cloned. Pulling latest changes..."
+            sh '''
+              git reset --hard HEAD
+              git pull origin master
+            '''
+          } else {
+            echo "Cloning the repository..."
+            sh 'git clone https://github.com/KahanHM/spring-petclinic-rest.git .'
+          }
+          
+          checkout scm
+          
+          // Manual change detection
+          def changedFiles = sh(
+            script: '''
+              if [ -n "$CHANGE_ID" ]; then
+                # For pull requests
+                git diff --name-only origin/master...HEAD
+              else
+                # For regular builds, check last commit
+                git diff --name-only HEAD~1 HEAD
+              fi
+            ''',
+            returnStdout: true
+          ).trim()
+          
+          echo "Changed files: ${changedFiles}"
+          
+          // Check if terraform files changed
+          if (changedFiles.contains('terraform/') && 
+              (changedFiles.contains('.tf') || changedFiles.contains('.tfvars'))) {
+            env.TERRAFORM_CHANGED = 'true'
+            echo "🔥 Terraform files detected in changes. Will run Terraform stages."
+          } else {
+            env.TERRAFORM_CHANGED = 'false'
+            echo "⏭️  No Terraform files changed. Skipping Terraform stages."
+          }
+        }
       }
-
-      // ✅ Important: Register changelog for `changeset` to work
-      checkout scm
     }
-  }
-}
 
     stage('Terraform Init') {
-      // 🔍 Detect changes in terraform/*.tf files at the root-level
       when {
-        changeset pattern: 'terraform/**/*.tf', comparator: 'ANT'
+        environment name: 'TERRAFORM_CHANGED', value: 'true'
       }
       steps {
         withCredentials([file(credentialsId: 'GCP-credinals', variable: 'GCP_credinals')]) {
@@ -66,179 +91,148 @@ pipeline {
         }
       }
     }
-    
 
-
-stage('Security and Validation Checks') {
-  when {
-        changeset pattern: 'terraform/**/*.tf', comparator: 'ANT'
+    stage('Security and Validation Checks') {
+      when {
+        environment name: 'TERRAFORM_CHANGED', value: 'true'
       }
-  steps {
-    script {
-      // Step 1: Run tfsec
-      try {
-        sh 'docker run --rm -v "$PWD/terraform:/src" aquasec/tfsec:latest /src'
-        echo "tfsec scan passed."
-      } catch (err) {
-        emailext(
-          subject: "tfsec Scan Failed",
-          body: "tfsec scan failed. Please check your Terraform code.",
-          to: "${env.EMAIL_RECIPIENTS}"
-        )
-        error("Stopping pipeline due to tfsec failure")
-      }
+      steps {
+        script {
+          try {
+            sh 'docker run --rm -v "$PWD/terraform:/src" aquasec/tfsec:latest /src'
+            echo "tfsec scan passed."
+          } catch (err) {
+            emailext(
+              subject: "tfsec Scan Failed",
+              body: "tfsec scan failed. Please check your Terraform code.",
+              to: "${env.EMAIL_RECIPIENTS}"
+            )
+            error("Stopping pipeline due to tfsec failure")
+          }
 
-      // Step 2: Run terraform validate
-      try {
-        sh '''
-          docker run --rm \
-            -v "$PWD/terraform:/workspace" \
-            -w /workspace \
-            hashicorp/terraform:1.9.7 \
-            validate
-        '''
-        echo "Terraform validate passed."
-      } catch (err) {
-        emailext(
-          subject: "Terraform Validate Failed",
-          body: "Terraform validation failed. Please fix errors before proceeding.",
-          to: "${env.EMAIL_RECIPIENTS}"
-        )
-        error("Stopping pipeline due to terraform validate failure")
-      }
+          try {
+            sh '''
+              docker run --rm \
+                -v "$PWD/terraform:/workspace" \
+                -w /workspace \
+                hashicorp/terraform:1.9.7 \
+                validate
+            '''
+            echo "Terraform validate passed."
+          } catch (err) {
+            emailext(
+              subject: "Terraform Validate Failed",
+              body: "Terraform validation failed. Please fix errors before proceeding.",
+              to: "${env.EMAIL_RECIPIENTS}"
+            )
+            error("Stopping pipeline due to terraform validate failure")
+          }
 
-      echo "Security and validation checks passed. Proceeding..."
-    }
-  }
-}
-
-
-    
-    
-
-
-
-stage('Terraform Plan') {
-  when {
-        changeset pattern: 'terraform/**/*.tf', comparator: 'ANT'
-      }
-  steps {
-    withCredentials([file(credentialsId: 'GCP-credinals', variable: 'GCP_credinals')]) {
-      script {
-        // Check if infrastructure already exists (terraform state list returns count)
-        def stateCheck = sh(
-          script: '''
-            docker run --rm \
-              -v "$PWD/terraform:/workspace" \
-              -v "$GCP_credinals:/workspace/creds.json" \
-              -w /workspace \
-              -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/creds.json" \
-              hashicorp/terraform:1.9.7 \
-              state list 2>/dev/null | wc -l
-          ''',
-          returnStdout: true
-        ).trim().toInteger()
-
-        // Initialize Terraform if state is empty
-        if (stateCheck == 0) {
-          echo "No existing Terraform state found. Running terraform init..."
-          sh '''
-            docker run --rm \
-              -v "$PWD/terraform:/workspace" \
-              -v "$GCP_credinals:/workspace/creds.json" \
-              -w /workspace \
-              -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/creds.json" \
-              hashicorp/terraform:1.9.7 \
-              init
-          '''
+          echo "Security and validation checks passed. Proceeding..."
         }
+      }
+    }
 
-        
-        def planExitCode = sh(
-          script: '''
-            docker run --rm \
-              -v "$PWD/terraform:/workspace" \
-              -v "$GCP_credinals:/workspace/creds.json" \
-              -w /workspace \
-              -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/creds.json" \
-              hashicorp/terraform:1.9.7 \
-              plan -refresh=true -detailed-exitcode -out=tfplan
-          ''',
-          returnStatus: true
-        )
-        if (planExitCode == 0) {
-                    echo "No changes detected. Infrastructure is up to date."
+    stage('Terraform Plan') {
+      when {
+        environment name: 'TERRAFORM_CHANGED', value: 'true'
+      }
+      steps {
+        withCredentials([file(credentialsId: 'GCP-credinals', variable: 'GCP_credinals')]) {
+          script {
+            def stateCheck = sh(
+              script: '''
+                docker run --rm \
+                  -v "$PWD/terraform:/workspace" \
+                  -v "$GCP_credinals:/workspace/creds.json" \
+                  -w /workspace \
+                  -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/creds.json" \
+                  hashicorp/terraform:1.9.7 \
+                  state list 2>/dev/null | wc -l
+              ''',
+              returnStdout: true
+            ).trim().toInteger()
+
+            if (stateCheck == 0) {
+              echo "No existing Terraform state found. Running terraform init..."
+              sh '''
+                docker run --rm \
+                  -v "$PWD/terraform:/workspace" \
+                  -v "$GCP_credinals:/workspace/creds.json" \
+                  -w /workspace \
+                  -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/creds.json" \
+                  hashicorp/terraform:1.9.7 \
+                  init
+              '''
+            }
+
+            def planExitCode = sh(
+              script: '''
+                docker run --rm \
+                  -v "$PWD/terraform:/workspace" \
+                  -v "$GCP_credinals:/workspace/creds.json" \
+                  -w /workspace \
+                  -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/creds.json" \
+                  hashicorp/terraform:1.9.7 \
+                  plan -refresh=true -detailed-exitcode -out=tfplan
+              ''',
+              returnStatus: true
+            )
+            
+            if (planExitCode == 0) {
+              echo "No changes detected. Infrastructure is up to date."
             } else if (planExitCode == 1) {
-              error(" Terraform plan failed. Check the logs for more information.")
+              error("Terraform plan failed. Check the logs for more information.")
             } else if (planExitCode == 2) {
               if (stateCheck == 0) {
                 echo "🆕 First-time deployment: Terraform will create infrastructure."
-                
               } else {
                 echo "Changes detected (create/update/delete). Stopping pipeline for review."
                 error("Terraform plan detected infrastructure changes or drift.")
               }
             } else {
-              error(" Unknown Terraform exit code: ${planExitCode}. Check execution logs.")
+              error("Unknown Terraform exit code: ${planExitCode}. Check execution logs.")
             }
-      }
-    }
-  }
-}
-
-
-stage('Terraform apply') {
-  when {
-        changeset pattern: 'terraform/**/*.tf', comparator: 'ANT'
-      }
-  steps {
-    withCredentials([file(credentialsId: 'GCP-credinals', variable: 'GCP_credinals')]) {
-      script {
-        try {
-          sh '''
-            docker run --rm \
-              -v "$PWD/terraform:/workspace" \
-              -v "$GCP_credinals:/workspace/creds.json" \
-              -w /workspace \
-              -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/creds.json" \
-              hashicorp/terraform:1.9.7 \
-              apply -auto-approve tfplan
-          '''
-          
-         
-          emailext(
-            subject: "Terraform Apply Successful",
-            body: "Terraform Apply completed successfully.",
-            to: "${env.EMAIL_RECIPIENTS}"
-          )
-
-        } catch (err) {
-          
-          emailext(
-            subject: "Terraform Apply Failed",
-            body: "Terraform Apply failed! Check Jenkins console for details.",
-            to: "${env.EMAIL_RECIPIENTS}"
-          )
-          error("Terraform Apply failed")
+          }
         }
       }
     }
-  }
-}
 
+    stage('Terraform apply') {
+      when {
+        environment name: 'TERRAFORM_CHANGED', value: 'true'
+      }
+      steps {
+        withCredentials([file(credentialsId: 'GCP-credinals', variable: 'GCP_credinals')]) {
+          script {
+            try {
+              sh '''
+                docker run --rm \
+                  -v "$PWD/terraform:/workspace" \
+                  -v "$GCP_credinals:/workspace/creds.json" \
+                  -w /workspace \
+                  -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/creds.json" \
+                  hashicorp/terraform:1.9.7 \
+                  apply -auto-approve tfplan
+              '''
+              
+              emailext(
+                subject: "Terraform Apply Successful",
+                body: "Terraform Apply completed successfully.",
+                to: "${env.EMAIL_RECIPIENTS}"
+              )
 
-
-
-
-
-
-
-
-
-
-
-
-   
-    
+            } catch (err) {
+              emailext(
+                subject: "Terraform Apply Failed",
+                body: "Terraform Apply failed! Check Jenkins console for details.",
+                to: "${env.EMAIL_RECIPIENTS}"
+              )
+              error("Terraform Apply failed")
+            }
+          }
+        }
+      }
+    }
   }
 }
