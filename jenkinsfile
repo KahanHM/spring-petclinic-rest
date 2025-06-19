@@ -239,7 +239,7 @@ stage('Ansible: Install Galaxy Roles') {
         -v "$PWD/Ansible":/ansible \
         -w /ansible \
         williamyeh/ansible:alpine3 \
-        ansible-galaxy install -r requirement.yml
+        ansible-galaxy role install -r requirement.yml  
     '''
   }
 }

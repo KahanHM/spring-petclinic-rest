@@ -1,5 +1,6 @@
 ---
 # Install roles before run playbook
+#ansible-galaxy role install -r {file name}
 roles:
   - name: robertdebock.bootstrap
   - name: geerlingguy.docker
