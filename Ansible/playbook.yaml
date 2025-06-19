@@ -71,17 +71,3 @@
         {{ manager_ip }}:2377
       when: node_swarm_status.stdout != "active" or node_swarm_status.rc != 0
       changed_when: false
-
-- name: Copy docker-compose.yaml to Swarm Manager
-  hosts: manager
-  become: true
-  vars_files:
-    - vars/swarm.yaml
-  tasks:
-    - name: Copy docker-compose.yml into manager home
-      ansible.builtin.copy:
-        src: ../docker-compose.yml
-        dest: /home/{{ ansible_user }}/docker-compose.yml
-        owner: "{{ ansible_user }}"
-        group: "{{ ansible_user }}"
-        mode: '0644'
