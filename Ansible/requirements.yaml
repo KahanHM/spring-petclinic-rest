@@ -1,6 +1,6 @@
 
 # Install roles before run playbook for the depency
-#ansible-galaxy role install -r {file name} to run the roles provide the path also to access roles
+#ansible-galaxy role install -r {file name} to run the roles provide the path 
 ---
 roles:
   - name: robertdebock.bootstrap

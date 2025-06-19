@@ -1,7 +1,7 @@
 #this release yml intialized details of version of application and docker image tag to use
 
 
-version: "1.1.4"
+version: "1.0.0"
 description: "🐳 Docker image refactor + Trivy security scan"
 docker_repo: "kahanahamed/spring-petclinic"
 apply_changes: true
