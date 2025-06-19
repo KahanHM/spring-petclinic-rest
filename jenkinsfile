@@ -10,7 +10,7 @@ pipeline {
   environment {
     TF_VAR_project_id = 'earnest-scene-454409-t5'
     EMAIL_RECIPIENTS = 'kahanahamed42@gmail.com'
-    RELEASE_FILE = 'release.yaml'
+    RELEASE_FILE = 'release.yml'
   }
 
   stages {
@@ -318,24 +318,35 @@ stage('Ansible: Run Playbook') {
     }
   }
 }
+
 stage('Load Release Metadata') {
-      steps {
-        script {
-          def release = readYaml(file: RELEASE_FILE)
+  steps {
+    script {
+      if (!fileExists(RELEASE_FILE)) {
+        def release = readYaml(file: RELEASE_FILE)
 
-          // Assign values to env vars for global access
-          env.VERSION = release.version
-          env.DESCRIPTION = release.description
-          env.docker_repo = release.docker_repo
-          env.APPLY_CHANGES = release.apply_changes.toString()
+      env.VERSION       = release.version
+      env.DESCRIPTION   = release.description
+      env.docker_repo   = release.docker_repo
+      env.APPLY_CHANGES = release.apply_changes.toString()
+      env.IMAGE_NAME    = "${release.docker_repo}:${release.version}"
 
-          echo " Version: ${env.VERSION}"
-          echo " Description: ${env.DESCRIPTION}"
-          echo " Docker Tag: ${env.docker_repo}"
-          echo " Apply Changes? ${env.APPLY_CHANGES}"
-        }
+
+
+      echo " Version: ${env.VERSION}"
+      echo " Description: ${env.DESCRIPTION}"
+      echo " Docker Tag: ${env.docker_repo}"
+      echo " Apply Changes? ${env.APPLY_CHANGES}"
+        
       }
+
+      
+
     }
+  }
+}
+
+
 
 
 
