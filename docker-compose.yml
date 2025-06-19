@@ -7,10 +7,12 @@ services:
     ports:
       - "80:9966"
     environment:
+      - SPRING_PROFILES_ACTIVE=mysql,spring-data-jpa
       - SPRING_DATASOURCE_URL=jdbc:mysql://10.10.3.5:3306/petclinicdb
       - SPRING_DATASOURCE_USERNAME=appuser
       - SPRING_DATASOURCE_PASSWORD_FILE=/run/secrets/db_password
       - SPRING_SQL_INIT_MODE=always
+    #create the secrets on manager before excuting this 
     secrets:
       - db_password
     deploy:

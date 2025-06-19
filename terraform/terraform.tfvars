@@ -150,7 +150,7 @@ backup_configuration = {
 # Optional user, password, and DB setup
 #don't use hardcorede passwords in prodution
 user_name_sql     = "appuser"
-user_password_sql = "123"
+user_password_sql = "admin"
 db_name_sql       = "petclinicdb"
 
 #this if for delete the sql related without this we can't destroy it's for onpy learning purpose enalbe on prodution level
