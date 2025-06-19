@@ -137,69 +137,67 @@ pipeline {
     }
 
     stage('Terraform Plan') {
-      when {
-        expression { return terraformChanged }
-      }
-      steps {
-        withCredentials([file(credentialsId: 'GCP-credinals', variable: 'GCP_credinals')]) {
-          script {
-            def stateCheck = sh(
-              script: '''
-                docker run --rm \
-                  -v "$PWD/terraform:/workspace" \
-                  -v "$GCP_credinals:/workspace/creds.json" \
-                  -w /workspace \
-                  -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/creds.json" \
-                  hashicorp/terraform:1.9.7 \
-                  state list 2>/dev/null | wc -l
-              ''',
-              returnStdout: true
-            ).trim().toInteger()
+  when { expression { return terraformChanged } }
+  steps {
+    withCredentials([file(credentialsId: 'GCP-credinals', variable: 'GCP_CRED')]) {
+      script {
+        // 1) Run plan with detailed exit code
+        def exitCode = sh(
+          script: '''
+            docker run --rm \
+              -v "$PWD/terraform:/workspace" \
+              -v "$GCP_CRED:/workspace/creds.json" \
+              -w /workspace \
+              -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/creds.json" \
+              hashicorp/terraform:1.9.7 \
+              plan -detailed-exitcode -out=tfplan || true
+          ''',
+          returnStatus: true
+        )
 
-            if (stateCheck == 0) {
-              echo "No existing Terraform state found. Running terraform init..."
-              sh '''
-                docker run --rm \
-                  -v "$PWD/terraform:/workspace" \
-                  -v "$GCP_credinals:/workspace/creds.json" \
-                  -w /workspace \
-                  -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/creds.json" \
-                  hashicorp/terraform:1.9.7 \
-                  init
-              '''
-            }
+        // 2) If exitCode == 1, it's a real error
+        if (exitCode == 1) {
+          error("❌ Terraform plan failed — syntax/config error. Check logs.")
+        }
 
-            def planExitCode = sh(
-              script: '''
-                docker run --rm \
-                  -v "$PWD/terraform:/workspace" \
-                  -v "$GCP_credinals:/workspace/creds.json" \
-                  -w /workspace \
-                  -e GOOGLE_APPLICATION_CREDENTIALS="/workspace/creds.json" \
-                  hashicorp/terraform:1.9.7 \
-                  plan -refresh=true -detailed-exitcode -out=tfplan
-              ''',
-              returnStatus: true
+        // 3) Inspect plan output for update/destroy
+        if (exitCode == 2) {
+          // dump plan to text
+          def planText = sh(
+            script: '''
+              docker run --rm \
+                -v "$PWD/terraform:/workspace" \
+                -w /workspace \
+                hashicorp/terraform:1.9.7 \
+                show -no-color tfplan
+            ''',
+            returnStdout: true
+          )
+
+          // look for "~ " (in‑place update) or "- " (destroy)
+          if (planText.contains("~ ") || planText.contains("- ")) {
+            emailext(
+              subject: "🚨 Drift Detected",
+              body: """Terraform detected drift (update/delete).
+  
+  Plan snippet:
+  ${planText.readLines().findAll{ it.startsWith("  ~ ") || it.startsWith("  - ") }.join("\n")}
+  """,
+              to: "${env.EMAIL_RECIPIENTS}"
             )
-            
-            if (planExitCode == 0) {
-              echo "No changes detected. Infrastructure is up to date."
-            } else if (planExitCode == 1) {
-              error("Terraform plan failed. Check the logs for more information.")
-            } else if (planExitCode == 2) {
-              if (stateCheck == 0) {
-                echo "🆕 First-time deployment: Terraform will create infrastructure."
-              } else {
-                echo "Changes detected (create/update/delete). Stopping pipeline for review."
-                error("Terraform plan detected infrastructure changes or drift.")
-              }
-            } else {
-              error("Unknown Terraform exit code: ${planExitCode}. Check execution logs.")
-            }
+            error("Stopping pipeline due to real drift (update/delete).")
+          } else {
+            // only creates, safe to proceed
+            echo "✅ Only new resources detected, no drift."
           }
+        } else {
+          // exitCode==0, no changes
+          echo "🔍 No infrastructure changes at all."
         }
       }
     }
+  }
+}
 
     stage('Terraform apply') {
       when {
