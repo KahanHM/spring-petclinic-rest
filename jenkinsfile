@@ -1,5 +1,5 @@
 def terraformChanged = false
-
+def ansibleChanged   = false
 pipeline {
   agent { label 'Agent1' }
 
@@ -19,48 +19,40 @@ pipeline {
       steps {
         script {
           if (fileExists('jenkinsfile')) {
-            echo "Repo already cloned. Pulling latest changes..."
-            sh '''
-              git reset --hard HEAD
-              git pull origin master
-            '''
+            sh 'git reset --hard HEAD && git pull origin master'
           } else {
-            echo "Cloning the repository..."
             sh 'git clone https://github.com/KahanHM/spring-petclinic-rest.git .'
           }
-          
           checkout scm
-          
-          // Manual change detection
+
           def changedFiles = sh(
             script: '''
               if [ -n "$CHANGE_ID" ]; then
-                # For pull requests
                 git diff --name-only origin/master...HEAD
               else
-                # For regular builds, check last commit
                 git diff --name-only HEAD~1 HEAD
               fi
-            ''',
-            returnStdout: true
+            ''', returnStdout: true
           ).trim()
-          
-          echo "Changed files: ${changedFiles}"
-          
-          // Check if terraform files changed
-          if (changedFiles.contains('terraform/') && 
+
+          echo "Changed files:\n${changedFiles}"
+
+          if (changedFiles.contains('terraform/') &&
               (changedFiles.contains('.tf') || changedFiles.contains('.tfvars'))) {
             terraformChanged = true
-            echo "🔥 Terraform files detected in changes. Will run Terraform stages."
-          } else {
-            terraformChanged = false
-            echo "⏭️  No Terraform files changed. Skipping Terraform stages."
           }
-          
           echo "DEBUG: terraformChanged = ${terraformChanged}"
+
+          if (changedFiles.split('\n').any { it.startsWith('Ansible/') }) {
+            ansibleChanged = true
+          }
+          echo "DEBUG: ansibleChanged = ${ansibleChanged}"
         }
       }
     }
+
+
+
 
     stage('Terraform Init') {
       when {
@@ -157,7 +149,7 @@ pipeline {
 
         // 2) If exitCode == 1, it's a real error
         if (exitCode == 1) {
-          error("❌ Terraform plan failed — syntax/config error. Check logs.")
+          error("Terraform plan failed — syntax/config error. Check logs.")
         }
 
         // 3) Inspect plan output for update/destroy
@@ -177,7 +169,7 @@ pipeline {
           // look for "~ " (in‑place update) or "- " (destroy)
           if (planText.contains("~ ") || planText.contains("- ")) {
             emailext(
-              subject: "🚨 Drift Detected",
+              subject: " Drift Detected",
               body: """Terraform detected drift (update/delete).
   
   Plan snippet:
@@ -188,11 +180,11 @@ pipeline {
             error("Stopping pipeline due to real drift (update/delete).")
           } else {
             // only creates, safe to proceed
-            echo "✅ Only new resources detected, no drift."
+            echo " Only new resources detected, no drift."
           }
         } else {
           // exitCode==0, no changes
-          echo "🔍 No infrastructure changes at all."
+          echo "No infrastructure changes at all."
         }
       }
     }
@@ -235,5 +227,217 @@ pipeline {
         }
       }
     }
+
+
+stage('Ansible: Install Galaxy Roles') {
+  when {
+    expression { return ansibleChanged }
+  }
+  steps {
+    sh '''
+      docker run --rm \
+        -v "$PWD/Ansible":/ansible \
+        -w /ansible \
+        williamyeh/ansible:alpine3 \
+        ansible-galaxy install -r requirements.yml
+    '''
+  }
+}
+
+
+stage('Ansible: Lint') {
+  when {
+    expression { return ansibleChanged }
+  }
+  steps {
+    script {
+      try {
+        sh '''
+          docker run --rm \
+            -v "$PWD/Ansible":/ansible \
+            -w /ansible \
+            williamyeh/ansible:alpine3 \
+            ansible-lint playbook.yaml
+        '''
+        echo "Ansible lint passed."
+      } catch (err) {
+        emailext(
+          subject: "Ansible Lint Failed ",
+          body: "Ansible linting failed. Please fix issues before proceeding.",
+          to: "${env.EMAIL_RECIPIENTS}"
+        )
+        error("Ansible lint failed. Stopping pipeline.")
+      }
+    }
+  }
+}
+
+stage('Ansible: Run Playbook') {
+  when {
+    expression { return ansibleChanged }
+  }
+  steps {
+    withCredentials([
+      file(credentialsId: 'ansible-inventory', variable: 'INV'),
+      sshUserPrivateKey(
+        credentialsId: 'ansible-ssh-key',
+        keyFileVariable:   'SSH_KEY',
+        usernameVariable:  'ANSIBLE_USER'
+      )
+    ]) {
+      script {
+        try {
+          sh '''
+            docker run --rm \
+              -v "$PWD/Ansible":/ansible \
+              -v "$INV":/ansible/inventory/hosts.ini:ro \
+              -v "$SSH_KEY":/root/.ssh/id_rsa:ro \
+              -w /ansible \
+              williamyeh/ansible:alpine3 \
+              ansible-playbook \
+                -i inventory/hosts.ini \
+                --private-key=/root/.ssh/id_rsa \
+                -u $ANSIBLE_USER \
+                playbook.yaml
+          '''
+          echo " Ansible playbook ran successfully."
+        } catch (err) {
+          emailext(
+            subject: "Ansible Playbook Failed ",
+            body: "Ansible playbook execution failed. Check Jenkins logs for details.",
+            to: "${env.EMAIL_RECIPIENTS}"
+          )
+          error("Ansible playbook failed.")
+        }
+      }
+    }
+  }
+}
+stage('Load Release Metadata') {
+      steps {
+        script {
+          def release = readYaml(file: RELEASE_FILE)
+
+          // Assign values to env vars for global access
+          env.VERSION = release.version
+          env.DESCRIPTION = release.description
+          env.docker_repo = release.docker_repo
+          env.APPLY_CHANGES = release.apply_changes.toString()
+
+          echo "🔖 Version: ${env.VERSION}"
+          echo "📄 Description: ${env.DESCRIPTION}"
+          echo "🐳 Docker Tag: ${env.docker_repo}"
+          echo "✅ Apply Changes? ${env.APPLY_CHANGES}"
+        }
+      }
+    }
+
+
+
+stage('Docker Build') {
+  steps {
+    script {
+      try {
+        sh "docker build -t ${docker_repo}:${VERSION} $PWD/"
+        echo "✅ Docker image built successfully: ${env.IMAGE_NAME}"
+      } catch (err) {
+        emailext(
+          subject: "Docker Build Failed ❌",
+          body: "Docker build failed for image ${env.IMAGE_NAME}. Check Jenkins logs.",
+          to: "${env.EMAIL_RECIPIENTS}"
+        )
+        error("Docker build failed")
+      }
+    }
+  }
+}
+
+
+stage('Trivy Scan') {
+  steps {
+    script {
+      def scanResult = sh(
+        script: """
+          docker run --rm \
+            -v /var/run/docker.sock:/var/run/docker.sock \
+            aquasec/trivy image \
+            --severity CRITICAL,HIGH \
+            --ignore-unfixed \
+            --exit-code 1 \
+            --no-progress \
+            ${env.IMAGE_NAME}
+        """,
+        returnStatus: true
+      )
+
+      if (scanResult != 0) {
+        emailext(
+          subject: "Trivy Scan Failed ",
+          body: "Trivy scan failed on ${env.IMAGE_NAME}. Fix critical/high vulnerabilities before proceeding.",
+          to: "${env.EMAIL_RECIPIENTS}"
+        )
+        error("Trivy scan failed due to fixable vulnerabilities.")
+      } else {
+        echo " No fixable CRITICAL or HIGH vulnerabilities found."
+      }
+    }
+  }
+}
+
+
+stage('Push to Docker Hub') {
+  steps {
+    withCredentials([usernamePassword(credentialsId: 'docker-hub-credentials', passwordVariable: 'DOCKER_TOKEN', usernameVariable: 'DOCKER_USERNAME')]) {
+      script {
+        try {
+          sh """
+            echo $DOCKER_TOKEN | docker login -u $DOCKER_USERNAME --password-stdin
+            docker push ${env.IMAGE_NAME}
+          """
+          echo " Image pushed to Docker Hub: ${env.IMAGE_NAME}"
+        } catch (err) {
+          emailext(
+            subject: "Docker Push Failed ",
+            body: "Failed to push Docker image ${env.IMAGE_NAME} to Docker Hub. Check credentials or network.",
+            to: "${env.EMAIL_RECIPIENTS}"
+          )
+          error("Docker push failed")
+        }
+      }
+    }
+  }
+}
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
   }
 }

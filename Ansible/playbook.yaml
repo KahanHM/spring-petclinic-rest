@@ -69,3 +69,17 @@
         --advertise-addr {{ worker_ip }}
         {{ manager_ip }}:2377
       when: node_swarm_status.stdout != "active" or node_swarm_status.rc != 0
+
+- name: Copy docker-compose.yml to Swarm Manager
+  hosts: manager
+  become: yes
+  vars_files:
+    - vars/swarm.yml
+  tasks:
+    - name: Copy docker-compose.yml into manager home
+      copy:
+        src: ../docker-compose.yml
+        dest: /home/{{ ansible_user }}/docker-compose.yml
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
