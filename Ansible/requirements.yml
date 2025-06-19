@@ -1,5 +1,5 @@
 
-# Install roles before run playbook 
+# Install roles before run playbook for the depency
 #ansible-galaxy role install -r {file name} to run the roles provide the path also
 ---
 roles:
