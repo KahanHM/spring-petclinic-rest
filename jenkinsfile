@@ -235,11 +235,11 @@ stage('Ansible: Install Galaxy Roles') {
   }
   steps {
     sh '''
-      docker run --rm \
-        -v "$PWD/Ansible":/ansible \
-        -w /ansible \
-        williamyeh/ansible:alpine3 \
-        ansible-galaxy install -r requirements.yaml -p roles
+     docker run --rm \
+  -v "$PWD/Ansible":/ansible \
+  -w /ansible \
+  ansible/ansible-runner:latest \
+  ansible-galaxy install -r requirements.yaml -p roles
     '''
   }
 }
@@ -296,7 +296,7 @@ stage('Ansible: Run Playbook') {
     -v "$SSH_KEY":/root/.ssh/id_rsa:ro \
     -w /ansible \
     -e ANSIBLE_ROLES_PATH=/ansible/roles \
-    williamyeh/ansible:alpine3 \
+    ansible/ansible-runner:latest \
     ansible-playbook \
       -i inventory/hosts.ini \
       --private-key=/root/.ssh/id_rsa \
