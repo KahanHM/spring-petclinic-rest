@@ -67,7 +67,7 @@
       ansible.builtin.command: >
         docker swarm join
         --token {{ hostvars['swarm_token_holder']['swarm_join_token_global'] }}
-        --advertise-addr {{ worker_ip }}
+        --advertise-addr {{ manager_ip }}
         {{ manager_ip }}:2377
       when: node_swarm_status.stdout != "active" or node_swarm_status.rc != 0
       changed_when: false
