@@ -1,5 +1,5 @@
 ---
-# Install roles
+# Install roles before run playbook
 roles:
   - name: robertdebock.bootstrap
   - name: geerlingguy.docker
