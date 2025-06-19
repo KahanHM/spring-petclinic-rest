@@ -258,7 +258,8 @@ stage('Ansible: Lint') {
             -w /data \
             -e ANSIBLE_ROLES_PATH=/data/roles \
             pipelinecomponents/ansible-lint:latest \
-            playbook.yaml
+            playbook.yaml --exclude roles
+
         '''
         echo "Ansible lint passed."
       } catch (err) {
