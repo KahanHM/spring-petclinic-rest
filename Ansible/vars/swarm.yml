@@ -1,2 +1,0 @@
- manager_ip: 10.10.1.2 #sample ip add internal ip of manager node
- ansible_user: "kahan"
