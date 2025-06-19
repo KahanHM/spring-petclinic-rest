@@ -373,6 +373,7 @@ stage('Trivy Scan') {
         script: """
           docker run --rm \
             -v /var/run/docker.sock:/var/run/docker.sock \
+            -v \$HOME/.trivy-cache:/root/.cache/ \
             aquasec/trivy image \
             --severity CRITICAL,HIGH \
             --ignore-unfixed \
@@ -391,7 +392,7 @@ stage('Trivy Scan') {
         )
         error("Trivy scan failed due to fixable vulnerabilities.")
       } else {
-        echo " No fixable CRITICAL or HIGH vulnerabilities found."
+        echo "No fixable CRITICAL or HIGH vulnerabilities found."
       }
     }
   }
