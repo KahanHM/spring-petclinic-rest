@@ -254,10 +254,10 @@ stage('Ansible: Lint') {
       try {
         sh '''
           docker run --rm \
-            -v "$PWD/Ansible":/ansible \
-            -w /ansible \
-            williamyeh/ansible:alpine3 \
-            ansible-lint playbook.yaml
+  -v "$PWD/Ansible":/data \
+  -w /data \
+  pipelinecomponents/ansible-lint:latest \
+  playbook.yaml
         '''
         echo "Ansible lint passed."
       } catch (err) {
