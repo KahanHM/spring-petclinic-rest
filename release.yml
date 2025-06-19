@@ -1,4 +1,5 @@
 #this release yml intialized details of version of application and docker image tag to use
+#this is a must one because based on this image build and push to docker hub
 
 
 version: "1.0.0"
